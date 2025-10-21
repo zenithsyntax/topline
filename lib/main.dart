@@ -42,8 +42,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late ScrollController _scrollController;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+  late TransformationController _transformationController;
 
   bool _isLoading = true;
+  double _currentZoom = 1.0;
 
   final List<String> _pageImages = [
     'assets/pages/tnpl_page-0001.jpg',
@@ -65,6 +67,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _transformationController = TransformationController();
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -88,13 +91,128 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void dispose() {
     _scrollController.dispose();
     _fadeController.dispose();
+    _transformationController.dispose();
     super.dispose();
+  }
+
+  void _zoomIn() {
+    setState(() {
+      _currentZoom = (_currentZoom * 1.2).clamp(0.5, 5.0);
+      _transformationController.value = Matrix4.identity()..scale(_currentZoom);
+    });
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _currentZoom = (_currentZoom / 1.2).clamp(0.5, 5.0);
+      _transformationController.value = Matrix4.identity()..scale(_currentZoom);
+    });
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _currentZoom = 1.0;
+      _transformationController.value = Matrix4.identity();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _isLoading ? _buildLoadingScreen() : _buildPdfViewer(),
+      body: Column(
+        children: [
+          _buildBanner(),
+          Expanded(
+            child: _isLoading ? _buildLoadingScreen() : _buildPdfViewer(),
+          ),
+        ],
+      ),
+      floatingActionButton: _isLoading ? null : _buildZoomControls(),
+    );
+  }
+
+  Widget _buildBanner() {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF840c4c),
+      padding: EdgeInsets.symmetric(
+        horizontal: MediaQuery.of(context).size.width > 768 ? 24 : 16,
+        vertical: MediaQuery.of(context).size.width > 768 ? 16 : 12,
+      ),
+      child: Row(
+        children: [
+          // Logo
+          Container(
+            width: MediaQuery.of(context).size.width > 768 ? 60 : 40,
+            height: MediaQuery.of(context).size.width > 768 ? 60 : 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/pages/logo.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.white,
+                    child: const Icon(
+                      Icons.business,
+                      color: Color(0xFF840c4c),
+                      size: 24,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          SizedBox(width: MediaQuery.of(context).size.width > 768 ? 16 : 12),
+          // Contact details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Maruthur- Ongallur Road, Pattambi, Palakkad Dist, Kerala - 679306',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: MediaQuery.of(context).size.width > 768 ? 14 : 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: MediaQuery.of(context).size.width > 768 ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.email,
+                      color: Colors.white,
+                      size: MediaQuery.of(context).size.width > 768 ? 16 : 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'toplinemarketing12@gmail.com',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: MediaQuery.of(context).size.width > 768
+                              ? 14
+                              : 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -145,13 +263,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _buildPdfViewer() {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: ListView.builder(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(),
-        itemCount: _pageImages.length,
-        itemBuilder: (context, index) {
-          return _buildPage(_pageImages[index], index);
-        },
+      child: InteractiveViewer(
+        transformationController: _transformationController,
+        minScale: 0.5,
+        maxScale: 5.0,
+        child: ListView.builder(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(),
+          itemCount: _pageImages.length,
+          itemBuilder: (context, index) {
+            return _buildPage(_pageImages[index], index);
+          },
+        ),
       ),
     );
   }
@@ -209,6 +332,40 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildZoomControls() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FloatingActionButton(
+          heroTag: "zoom_in",
+          onPressed: _zoomIn,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 4,
+          child: const Icon(Icons.zoom_in),
+        ),
+        const SizedBox(height: 8),
+        FloatingActionButton(
+          heroTag: "zoom_out",
+          onPressed: _zoomOut,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 4,
+          child: const Icon(Icons.zoom_out),
+        ),
+        const SizedBox(height: 8),
+        FloatingActionButton(
+          heroTag: "zoom_reset",
+          onPressed: _resetZoom,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 4,
+          child: const Icon(Icons.refresh),
+        ),
+      ],
     );
   }
 }
